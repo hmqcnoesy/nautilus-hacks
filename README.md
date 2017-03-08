@@ -93,3 +93,35 @@ secret123
 The output is the decrypted password. (In this case, "secret123")
 
 This same process works for encrypted values in the registry (BGP username, password at `HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Thermo\Nautilus\9.3\BGP#servername#instancename#x\ParameterX`).
+
+
+
+## Get Nautilus to cough up unintended data using SQL injection
+
+Go to a folder that uses a filter with a text argument.  For this example, there is a folder for finding a plate by its name.
+The filter looks like this:
+
+![Filter properties showing where statement](img/08.jpg)
+
+Change the plate entity's view settings to show only the name.  This will make the SQL injection simpler:
+
+![Explorer columns window for plate entity showing only Name column](img/09.jpg)
+
+Refresh the filter.  In the filter arguments window, provide the SQL injection string as the text value.  
+The injection string must close the substituted string with a `'` character, append a right paren, then `union` the 
+query to inject.  The unioned select must have an ID value (can be `0`), then the column of
+the info you want displayed *TWICE*, then a status column (using `'X'` here), then six string values (use `''`).  After the 
+injected query, remember to add `--` to comment out the remainder of the hard coded SQL. For example, to get this plate
+view to display the encrypted lims_role password, use the following as the text argument in the "Plate by name" filter:
+
+```
+') union SELECT 0, lims_security.get_role_security, lims_security.get_role_security,'X','','','','','','' from dual  -- 
+```
+
+Like so:
+
+![Filter args window showing injected SQL value](img/10.jpg)
+
+The result should be exactly what it is you wanted to see:
+
+![Explorer window showing result of injected SQL](img/11.jpg)
