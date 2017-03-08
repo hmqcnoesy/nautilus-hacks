@@ -39,6 +39,9 @@ Login (any user with lims_readonly) and run query:
 select lims_security.get_role_security from dual;
 ```
 
+(If you don't have a means of connecting to the database other than the Nautilus client, see section 
+on "Get Nautilus to cough up unintended data using SQL injection").
+
 Will give back something like `H7y5bAD1IidlB1YqxVyusw==`, which is the encrypted password.
 
 Open the .Net IL disassembler, ildasm.exe.  When Visual Studio is installed, ildasm can be found in a path such as `C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6.1 Tools`.
