@@ -1,0 +1,142 @@
+<?xml version = '1.0' encoding = 'UTF-8'?>
+<rows>
+   <row>
+      <key>audit</key>
+      <value>select at.timestamp, s.os_user_name, at.transaction_name, at.transaction_reason,
+    ae.audit_table, ae.event_type, ae.audit_table_numeric_key,
+    ad.audit_field, ad.new_value, ad.old_value
+from lims_sys.audit_transaction at
+join lims_sys.lims_session s on at.session_id = s.session_id
+join lims_sys.audit_event ae on ae.audit_transaction_id = at.audit_transaction_id
+join lims_sys.audit_data ad on ad.audit_event_id = ae.audit_event_id
+where ae.audit_table = :table_name
+and at.timestamp > trunc(sysdate)
+order by at.timestamp desc, ad.audit_field;</value>
+   </row>
+   <row>
+      <key>block</key>
+      <value>SELECT decode(blocker.blocking_session, NULL, '**TOP LEVEL** ' || blocker.username, ' ' || blocker.username) || ' (' || blocker.SID || ') has been blocking ' ||
+  blocked.username || ' (' ||  blocked.SID || ') since ' || to_char(sysdate - (blocked.seconds_in_wait / 86400), 'HH24:MI:SS') || ' (' || 
+  round(blocked.seconds_in_wait / 60, 0) || ' minutes)' blocking_description,
+  o_blocker.full_name blocker_name,
+  ou_blocker.u_email_address blocker_email,
+  o_blocked.full_name blocked_name,
+  ou_blocked.u_email_address blocked_email
+FROM gv$session blocked, lims.OPERATOR o_blocked ,
+  lims.operator_user ou_blocked,
+  gv$session blocker, lims.OPERATOR o_blocker ,
+  lims.operator_user ou_blocker
+WHERE blocked.blocking_session = blocker.SID
+AND blocked.blocking_instance = blocker.inst_id
+AND o_blocked.operator_id = ou_blocked.operator_id 
+AND o_blocker.operator_id = ou_blocker.operator_id
+AND blocked.username =
+UPPER(o_blocked.database_name) 
+AND blocker.username = UPPER(o_blocker.database_name)
+ORDER BY 1 DESC;</value>
+   </row>
+   <row>
+      <key>cf</key>
+      <value>CREATE FUNCTION function_name
+          [ (parameter) ]
+          RETURN return_datatype
+          IS
+              [declaration_section]
+          BEGIN
+              ...
+          END function_name;
+      </value>
+   </row>
+   <row>
+      <key>cp</key>
+      <value>CREATE PROCEDURE procedure_name
+      [ (parameter]) ]
+      IS
+          [declaration_section]
+      BEGIN
+          ...
+      END procedure_name;
+      </value>
+   </row>
+   <row>
+      <key>ct</key>
+      <value>CREATE TABLE table ()</value>
+   </row>
+   <row>
+      <key>df</key>
+      <value>DELETE FROM table WHERE </value>
+   </row>
+   <row>
+      <key>fk</key>
+      <value>select table_name, constraint_name, status, owner
+from all_constraints
+where r_owner = 'LIMS'
+and constraint_type = 'R'
+and r_constraint_name in
+ (
+   select constraint_name from all_constraints
+   where constraint_type in ('P', 'U')
+   and table_name = upper(:table_name)
+   and owner = 'LIMS'
+ )
+order by table_name, constraint_name;</value>
+   </row>
+   <row>
+      <key>folder</key>
+      <value>select lpad(' ' , (level-1)*2) || f.name, f.folder_id, f.parent_id, se.name entity, 
+    sys_connect_by_path(f.name, '\') path,
+    (select where_statement from lims_sys.filter where filter_id = f.filter_id) sql
+from lims_sys.folder f
+join lims_sys.schema_entity se on f.schema_entity_id = se.schema_entity_id
+start with f.parent_id is null
+connect by prior f.folder_id = parent_id
+order siblings by f.description;</value>
+   </row>
+   <row>
+      <key>ii</key>
+      <value>INSERT INTO table VALUES ()</value>
+   </row>
+   <row>
+      <key>operatorfilterargs</key>
+      <value>select o.name, f.name, fa.name, ofa.value_number, ofa.value_text, ofa.value_date
+from lims_sys.operator_filter_argument ofa
+join lims_sys.filter_argument fa on fa.filter_argument_id = ofa.filter_argument_id
+join lims_sys.filter f on f.filter_id = fa.filter_id
+join lims_sys.operator o on o.operator_id = ofa.operator_id
+where lower(f.name) = lower(:filter_name)
+order by o.name, fa.name;
+</value>
+   </row>
+   <row>
+      <key>setrole</key>
+      <value>set role lims_user identified by "p_5P3XV1";</value>
+   </row>
+   <row>
+      <key>ssf</key>
+      <value>select /*no where*/ * from lims_sys.[tbl] [x] order by 1 desc;</value>
+   </row>
+   <row>
+      <key>ssfw</key>
+      <value>select /*where*/ * from lims_sys.[tbl] where [col]_id = [val] order by 1 desc;</value>
+   </row>
+   <row>
+      <key>workflow</key>
+      <value>select lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, wn.*
+from lims_sys.workflow_node wn
+join lims_sys.workflow_node_type wnt on wn.workflow_node_type_id = wnt.workflow_node_type_id
+start with wn.workflow_id = :workflow_id and wn.parent_id is null
+connect by prior wn.workflow_node_id = parent_id
+order siblings by wn.order_number;</value>
+   </row>
+   <row>
+      <key>workflowcompare</key>
+      <value>select /*for compares*/ lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, wn.workflow_node_type_id, extra, 
+    events, wn.usage, workflow_prompt_type, workflow_prompt_column, workflow_level, template, long_name, 
+    parameter_1, parameter_2, parameter_3, parameter_4, parameter_5
+from lims_sys.workflow_node wn
+join lims_sys.workflow_node_type wnt on wn.workflow_node_type_id = wnt.workflow_node_type_id
+start with wn.workflow_id = :workflow_id and wn.parent_id is null
+connect by prior wn.workflow_node_id = parent_id
+order siblings by wn.order_number;</value>
+   </row>
+</rows>
