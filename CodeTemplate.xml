@@ -97,6 +97,10 @@ order siblings by f.description;</value>
       <value>INSERT INTO table VALUES ()</value>
    </row>
    <row>
+      <key>listagg</key>
+      <value>listagg([col_name], ', ') within group (order by [col_name])</value>
+   </row>
+   <row>
       <key>operatorfilterargs</key>
       <value>select o.name, f.name, fa.name, ofa.value_number, ofa.value_text, ofa.value_date
 from lims_sys.operator_filter_argument ofa
@@ -138,5 +142,14 @@ join lims_sys.workflow_node_type wnt on wn.workflow_node_type_id = wnt.workflow_
 start with wn.workflow_id = :workflow_id and wn.parent_id is null
 connect by prior wn.workflow_node_id = parent_id
 order siblings by wn.order_number;</value>
+   </row>
+   <row>
+      <key>configgroup</key>
+      <value>select lpad(' ' , (level-1)*2) || cg.name, cg.config_group_id, cg.parent_id,
+  sys_connect_by_path(cg.name, '\') path
+from lims_sys.config_group cg
+start with cg.parent_id is null
+connect by prior cg.config_group_id = parent_id
+order siblings by cg.name;</value>
    </row>
 </rows>
