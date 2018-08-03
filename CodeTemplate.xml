@@ -48,6 +48,15 @@ ORDER BY 1 DESC;</value>
       </value>
    </row>
    <row>
+      <key>configgroup</key>
+      <value>select lpad(' ' , (level-1)*2) || cg.name, cg.config_group_id, cg.parent_id,
+  sys_connect_by_path(cg.name, '\') path
+from lims_sys.config_group cg
+start with cg.parent_id is null
+connect by prior cg.config_group_id = parent_id
+order siblings by cg.name;</value>
+   </row>
+   <row>
       <key>cp</key>
       <value>CREATE PROCEDURE procedure_name
       [ (parameter]) ]
@@ -136,20 +145,15 @@ order siblings by wn.order_number;</value>
       <key>workflowcompare</key>
       <value>select /*for compares*/ lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, wn.workflow_node_type_id, extra, 
     events, wn.usage, workflow_prompt_type, workflow_prompt_column, workflow_level, template, long_name, 
-    parameter_1, parameter_2, parameter_3, parameter_4, parameter_5
+    parameter_1, parameter_2, parameter_3, parameter_4, parameter_5 
+    /*uncomment to include sql wf */ 
+    --, s.command_text
 from lims_sys.workflow_node wn
 join lims_sys.workflow_node_type wnt on wn.workflow_node_type_id = wnt.workflow_node_type_id
+/*uncomment to include sql wf */ 
+--left outer join lims_sys.u_sql_command s on s.workflow_node_id = wn.workflow_node_id
 start with wn.workflow_id = :workflow_id and wn.parent_id is null
 connect by prior wn.workflow_node_id = parent_id
 order siblings by wn.order_number;</value>
-   </row>
-   <row>
-      <key>configgroup</key>
-      <value>select lpad(' ' , (level-1)*2) || cg.name, cg.config_group_id, cg.parent_id,
-  sys_connect_by_path(cg.name, '\') path
-from lims_sys.config_group cg
-start with cg.parent_id is null
-connect by prior cg.config_group_id = parent_id
-order siblings by cg.name;</value>
    </row>
 </rows>
