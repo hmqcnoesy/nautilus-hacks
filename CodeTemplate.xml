@@ -143,17 +143,27 @@ order siblings by wn.order_number;</value>
    </row>
    <row>
       <key>workflowcompare</key>
-      <value>select /*for compares*/ lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, wn.workflow_node_type_id, extra, 
-    events, wn.usage, workflow_prompt_type, workflow_prompt_column, workflow_level, template, long_name, 
-    parameter_1, parameter_2, parameter_3, parameter_4, parameter_5 
-    /*uncomment to include sql wf */ 
+      <value>select lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, wn.workflow_node_type_id, 
+    events, wn.usage, workflow_prompt_type, workflow_prompt_column, workflow_level, 
+    case when wn.workflow_node_type_id = 1 then (select name || ' ' || version_status from lims_sys.aliquot_template where to_char(aliquot_template_id) = wn.template) 
+    when wn.workflow_node_type_id = 28 then (select name || ' ' || version_status from lims_sys.result_template where to_char(result_template_id) = wn.template) 
+    when wn.workflow_node_type_id = 42 then (select name || ' ' || version_status from lims_sys.test_template where to_char(test_template_id) = wn.template) 
+    when wn.workflow_node_type_id = 41 then (select name || ' ' || version || ' ' || version_status from lims_sys.workflow where to_char(workflow_id) = wn.template)
+    else to_char(template) end template,
+    long_name, parameter_1, parameter_2, 
+    case when parameter_3 = 'F' then 'FFF' 
+    when wn.workflow_node_type_id = 10 then (select name from lims_sys.schema_field_prompt where to_char(schema_field_prompt_id) = wn.parameter_3)
+    else parameter_3 end p3, parameter_4, parameter_5 
+    /* 1 of 3 uncomment to include sql wf */ 
     --, s.command_text
 from lims_sys.workflow_node wn
 join lims_sys.workflow_node_type wnt on wn.workflow_node_type_id = wnt.workflow_node_type_id
-/*uncomment to include sql wf */ 
+/* 2 of 3 uncomment to include sql wf */ 
 --left outer join lims_sys.u_sql_command s on s.workflow_node_id = wn.workflow_node_id
-start with wn.workflow_id = :workflow_id and wn.parent_id is null
+start with wn.parent_id is null 
+and wn.workflow_id = (select workflow_id from lims_sys.workflow where version_status = 'A' and name = :workflow_name)
 connect by prior wn.workflow_node_id = parent_id
-order siblings by wn.order_number;</value>
+order siblings by wn.order_number /* 3 of 3 uncomment to include sql wf */ --, s.order_number
+;</value>
    </row>
 </rows>
