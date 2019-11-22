@@ -1,6 +1,25 @@
 <?xml version = '1.0' encoding = 'UTF-8'?>
 <rows>
    <row>
+      <key>aliquotresults</key>
+      <value>select a.aliquot_id, a.name aliquot_name, t.test_id, t.name test_name, r.result_id, r.name, r.original_result, r.formatted_result
+from lims_sys.aliquot a 
+join lims_sys.test t on t.aliquot_id = a.aliquot_id
+join lims_sys.result r on r.test_id = t.test_id
+where a.aliquot_id in ([:aliquot_id]);</value>
+   </row>
+   <row>
+      <key>anon</key>
+      <value>declare
+    str varchar2(255) := 'Thing ';
+begin
+    for rec in (select 'one' col from dual union select 'two' from dual)
+    loop
+        dbms_output.put_line(str || rec.col);
+    end loop;
+end;</value>
+   </row>
+   <row>
       <key>audit</key>
       <value>select at.timestamp, s.os_user_name, at.transaction_name, at.transaction_reason,
     ae.audit_table, ae.event_type, ae.audit_table_numeric_key,
@@ -49,12 +68,31 @@ ORDER BY 1 DESC;</value>
    </row>
    <row>
       <key>configgroup</key>
-      <value>select lpad(' ' , (level-1)*2) || cg.name, cg.config_group_id, cg.parent_id,
+      <value>select /*group*/ lpad(' ' , (level-1)*2) || cg.name, cg.config_group_id, cg.parent_id,
   sys_connect_by_path(cg.name, '\') path
 from lims_sys.config_group cg
 start with cg.parent_id is null
 connect by prior cg.config_group_id = parent_id
 order siblings by cg.name;</value>
+   </row>
+   <row>
+      <key>configitem</key>
+      <value>select /*item*/ name, val, path, id from (
+with config_groups as (
+select 1 o, rownum r, level lvl, lpad(' ' , (level-1)*2) || cg.name name, cg.config_group_id, cg.parent_id,
+  sys_connect_by_path(cg.name, '\') path, null val, cg.config_group_id id
+from lims_sys.config_group cg
+start with cg.parent_id is null
+connect by prior cg.config_group_id = parent_id
+order siblings by cg.name)
+select o, r, lvl, name, config_group_id, parent_id, path, val, id
+from config_groups
+union
+select 2, config_groups.r, config_groups.lvl + 1, lpad(' ', config_groups.lvl*2) || config_item.name, config_item.config_group_id, null, 
+  config_groups.path || '\' || config_item.name, config_item.system_value, config_item.config_item_id
+from lims_sys.config_item
+join config_groups on config_item.config_group_id = config_groups.config_group_id
+order by 2, 1, 4)</value>
    </row>
    <row>
       <key>cp</key>
@@ -70,6 +108,14 @@ order siblings by cg.name;</value>
    <row>
       <key>ct</key>
       <value>CREATE TABLE table ()</value>
+   </row>
+   <row>
+      <key>describe</key>
+      <value>select * 
+from all_tab_cols 
+where lower(table_name) = lower(:table_name) 
+and owner = 'LIMS' 
+order by column_id;</value>
    </row>
    <row>
       <key>df</key>
@@ -92,7 +138,7 @@ order by table_name, constraint_name;</value>
    </row>
    <row>
       <key>folder</key>
-      <value>select lpad(' ' , (level-1)*2) || f.name, f.folder_id, f.parent_id, se.name entity, 
+      <value>select lpad(' ' , (level-1)*2) || f.name name, f.folder_id, f.parent_id, se.name entity, 
     sys_connect_by_path(f.name, '\') path,
     (select where_statement from lims_sys.filter where filter_id = f.filter_id) sql
 from lims_sys.folder f
@@ -110,6 +156,23 @@ order siblings by f.description;</value>
       <value>listagg([col_name], ', ') within group (order by [col_name])</value>
    </row>
    <row>
+      <key>location</key>
+      <value>select lpad(' ' , (level-1)*2) || name, sys_connect_by_path(name, '\') path, location.*
+from lims_sys.location
+start with name = 'Building 7'
+connect by nocycle prior location_id = parent_id
+order siblings by name;</value>
+   </row>
+   <row>
+      <key>og</key>
+      <value>select g.group_id, g.name, og.access_level
+from lims_sys.operator o
+join lims_sys.operator_group og on o.operator_id = og.operator_id
+join lims_sys.lims_group g on g.group_id = og.group_id
+where lower(o.database_name) = lower(:database_name)
+order by 2;</value>
+   </row>
+   <row>
       <key>operatorfilterargs</key>
       <value>select o.name, f.name, fa.name, ofa.value_number, ofa.value_text, ofa.value_date
 from lims_sys.operator_filter_argument ofa
@@ -119,6 +182,22 @@ join lims_sys.operator o on o.operator_id = ofa.operator_id
 where lower(f.name) = lower(:filter_name)
 order by o.name, fa.name;
 </value>
+   </row>
+   <row>
+      <key>phrase</key>
+      <value>select pe.* 
+from lims_sys.phrase_header ph
+join lims_sys.phrase_entry pe on pe.phrase_id = ph.phrase_id
+where lower(ph.name) = lower(:phrase_name)
+order by pe.order_number;</value>
+   </row>
+   <row>
+      <key>plateresults</key>
+      <value>select p.plate_id, p.name plate_name, t.test_id, t.name test_name, r.result_id, r.name, r.original_result, r.formatted_result
+from lims_sys.plate p 
+join lims_sys.test t on t.plate_id = p.plate_id
+join lims_sys.result r on r.test_id = t.test_id
+where p.plate_id in ([:plate_id]);</value>
    </row>
    <row>
       <key>setrole</key>
@@ -133,6 +212,10 @@ order by o.name, fa.name;
       <value>select /*where*/ * from lims_sys.[tbl] where [col]_id = [val] order by 1 desc;</value>
    </row>
    <row>
+      <key>ver</key>
+      <value>update lims_sys.[workflow] set version_status = '[D]' where [workflow_id] = [:id];</value>
+   </row>
+   <row>
       <key>workflow</key>
       <value>select lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, wn.*
 from lims_sys.workflow_node wn
@@ -143,27 +226,62 @@ order siblings by wn.order_number;</value>
    </row>
    <row>
       <key>workflowcompare</key>
-      <value>select lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, wn.workflow_node_type_id, 
+      <value>select (select name from lims_sys.workflow where workflow_id = wn.workflow_id) wfname,
+    lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, 
     events, wn.usage, workflow_prompt_type, workflow_prompt_column, workflow_level, 
-    case when wn.workflow_node_type_id = 1 then (select name || ' ' || version_status from lims_sys.aliquot_template where to_char(aliquot_template_id) = wn.template) 
-    when wn.workflow_node_type_id = 28 then (select name || ' ' || version_status from lims_sys.result_template where to_char(result_template_id) = wn.template) 
-    when wn.workflow_node_type_id = 42 then (select name || ' ' || version_status from lims_sys.test_template where to_char(test_template_id) = wn.template) 
-    when wn.workflow_node_type_id = 41 then (select name || ' ' || version || ' ' || version_status from lims_sys.workflow where to_char(workflow_id) = wn.template)
+    case 
+    when wnt.name = 'Plate' then (select name || ' ' || version_status from lims_sys.plate_template where to_char(plate_template_id) = wn.template) 
+    when wnt.name = 'Aliquot' then (select name || ' ' || version_status from lims_sys.aliquot_template where to_char(aliquot_template_id) = wn.template) 
+    when wnt.name = 'Result' then (select name || ' ' || version_status from lims_sys.result_template where to_char(result_template_id) = wn.template) 
+    when wnt.name = 'Test' then (select name || ' ' || version_status from lims_sys.test_template where to_char(test_template_id) = wn.template) 
+    when wnt.name = 'SubTree' then (select name || ' ' || version || ' ' || version_status from lims_sys.workflow where to_char(workflow_id) = wn.template)
+    when wnt.name = 'Plate Plan' then (select name || ' ' || version_status from lims_sys.plate_plan_template where to_char(plate_plan_template_id) = wn.template) 
+    when wnt.name = 'Request' then (select name || ' ' || version_status from lims_sys.u_request_template where to_char(template_id) = wn.template) 
     else to_char(template) end template,
     long_name, parameter_1, parameter_2, 
     case when parameter_3 = 'F' then 'FFF' 
     when wn.workflow_node_type_id = 10 then (select name from lims_sys.schema_field_prompt where to_char(schema_field_prompt_id) = wn.parameter_3)
     else parameter_3 end p3, parameter_4, parameter_5 
-    /* 1 of 3 uncomment to include sql wf */ 
-    --, s.command_text
+/* 1 of 3 uncomment to include sql wf */ 
+--    , s.command_text
 from lims_sys.workflow_node wn
 join lims_sys.workflow_node_type wnt on wn.workflow_node_type_id = wnt.workflow_node_type_id
 /* 2 of 3 uncomment to include sql wf */ 
 --left outer join lims_sys.u_sql_command s on s.workflow_node_id = wn.workflow_node_id
 start with wn.parent_id is null 
-and wn.workflow_id = (select workflow_id from lims_sys.workflow where version_status = 'A' and name = :workflow_name)
+and wn.workflow_id in 
+(select workflow_id 
+ from lims_sys.workflow 
+ where version_status = 'D' 
+ and name in 
+ (
+    :names
+ ) 
+)
 connect by prior wn.workflow_node_id = parent_id
-order siblings by wn.order_number /* 3 of 3 uncomment to include sql wf */ --, s.order_number
+order siblings by (select name from lims_sys.workflow where workflow_id = wn.workflow_id), wn.order_number 
+/* 3 of 3 uncomment to include sql wf */ 
+--, s.order_number
 ;</value>
+   </row>
+   <row>
+      <key>background_log</key>
+      <value>select /* Dynamic data workflow events executed today */
+  start_time, seconds, decode(entity, 'P','Plate', 'A','Aliquot', 'S','Sample', 'T','Test', 'R','Result', entity) entity, 
+  entity_id, workflow.name wf_name, wf_id, wf_node_id, order_number, workflow_node.name wn_name, long_name
+from 
+(
+    select start_time, end_time, (end_time - start_time) * 24 * 60 * 60 seconds, substr(parameter, 1, 1) entity, 
+    substr(parameter, instr(parameter, ',') + 1, instr(parameter, ',', 1, 2) - instr(parameter, ',')-1) entity_id,
+    substr(parameter, instr(parameter, ',', 1, 2) + 1, instr(parameter, ',', 1, 3) - instr(parameter, ',', 1, 2)-1) wf_id,
+    substr(parameter, instr(parameter, ',', 1, 3) + 2, instr(parameter, ',', 1, 4) - instr(parameter, ',', 1, 3)-2) wf_node_id,
+    parameter
+    from lims_sys.background_log_12
+    where start_time > trunc(sysdate) - 1
+    and parameter like '%#%'
+)
+join lims_sys.workflow_node on workflow_node.workflow_node_id = wf_node_id
+join lims_sys.workflow on workflow.workflow_id = workflow_node.workflow_id
+order by 1 desc;</value>
    </row>
 </rows>
