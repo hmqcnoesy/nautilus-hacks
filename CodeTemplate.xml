@@ -33,6 +33,26 @@ and at.timestamp > trunc(sysdate)
 order by at.timestamp desc, ad.audit_field;</value>
    </row>
    <row>
+      <key>background_log</key>
+      <value>select /* Dynamic data workflow events executed today */
+  start_time, seconds, decode(entity, 'P','Plate', 'A','Aliquot', 'S','Sample', 'T','Test', 'R','Result', entity) entity, 
+  entity_id, workflow.name wf_name, wf_id, wf_node_id, order_number, workflow_node.name wn_name, long_name
+from 
+(
+    select start_time, end_time, (end_time - start_time) * 24 * 60 * 60 seconds, substr(parameter, 1, 1) entity, 
+    substr(parameter, instr(parameter, ',') + 1, instr(parameter, ',', 1, 2) - instr(parameter, ',')-1) entity_id,
+    substr(parameter, instr(parameter, ',', 1, 2) + 1, instr(parameter, ',', 1, 3) - instr(parameter, ',', 1, 2)-1) wf_id,
+    substr(parameter, instr(parameter, ',', 1, 3) + 2, instr(parameter, ',', 1, 4) - instr(parameter, ',', 1, 3)-2) wf_node_id,
+    parameter
+    from lims_sys.background_log_12
+    where start_time > trunc(sysdate) - 1
+    and parameter like '%#%'
+)
+join lims_sys.workflow_node on workflow_node.workflow_node_id = wf_node_id
+join lims_sys.workflow on workflow.workflow_id = workflow_node.workflow_id
+order by 1 desc;</value>
+   </row>
+   <row>
       <key>block</key>
       <value>SELECT decode(blocker.blocking_session, NULL, '**TOP LEVEL** ' || blocker.username, ' ' || blocker.username) || ' (' || blocker.SID || ') has been blocking ' ||
   blocked.username || ' (' ||  blocked.SID || ') since ' || to_char(sysdate - (blocked.seconds_in_wait / 86400), 'HH24:MI:SS') || ' (' || 
@@ -225,7 +245,7 @@ connect by prior wn.workflow_node_id = parent_id
 order siblings by wn.order_number;</value>
    </row>
    <row>
-      <key>workflowcompare</key>
+      <key>diff_workflow</key>
       <value>select (select name from lims_sys.workflow where workflow_id = wn.workflow_id) wfname,
     lpad(' ' , (level-1)*2) || wn.name, wnt.name node_type, 
     events, wn.usage, workflow_prompt_type, workflow_prompt_column, workflow_level, 
@@ -265,23 +285,359 @@ order siblings by (select name from lims_sys.workflow where workflow_id = wn.wor
 ;</value>
    </row>
    <row>
-      <key>background_log</key>
-      <value>select /* Dynamic data workflow events executed today */
-  start_time, seconds, decode(entity, 'P','Plate', 'A','Aliquot', 'S','Sample', 'T','Test', 'R','Result', entity) entity, 
-  entity_id, workflow.name wf_name, wf_id, wf_node_id, order_number, workflow_node.name wn_name, long_name
-from 
+      <key>diff_syntax</key>
+      <value>select s.group_id,s.name,s.description,s.version_status,s.syntax_type,
+(select name from lims_sys.syntax_item_type where syntax_item_type_id = i.syntax_item_type_id) t,
+i.order_number,i.text_value,i.numeric_value, 
+(select name text_value from lims_sys.syntax_item where syntax_item_id = i.parent_id) parent
+from lims_sys.syntax s 
+join lims_sys.syntax_item i on s.syntax_id = i.syntax_id
+where name in 
 (
-    select start_time, end_time, (end_time - start_time) * 24 * 60 * 60 seconds, substr(parameter, 1, 1) entity, 
-    substr(parameter, instr(parameter, ',') + 1, instr(parameter, ',', 1, 2) - instr(parameter, ',')-1) entity_id,
-    substr(parameter, instr(parameter, ',', 1, 2) + 1, instr(parameter, ',', 1, 3) - instr(parameter, ',', 1, 2)-1) wf_id,
-    substr(parameter, instr(parameter, ',', 1, 3) + 2, instr(parameter, ',', 1, 4) - instr(parameter, ',', 1, 3)-2) wf_node_id,
-    parameter
-    from lims_sys.background_log_12
-    where start_time > trunc(sysdate) - 1
-    and parameter like '%#%'
+:names
 )
-join lims_sys.workflow_node on workflow_node.workflow_node_id = wf_node_id
-join lims_sys.workflow on workflow.workflow_id = workflow_node.workflow_id
-order by 1 desc;</value>
+and s.version_status != 'X'
+order by s.name, s.version_status, i.order_number;
+</value>
+   </row>
+   <row>
+      <key>diff_script</key>
+      <value>select s.group_id,s.name,s.description,s.version_status,s.syntax_type,
+(select name from lims_sys.syntax_item_type where syntax_item_type_id = i.syntax_item_type_id) t,
+i.order_number,i.text_value,i.numeric_value, 
+(select name text_value from lims_sys.syntax_item where syntax_item_id = i.parent_id) parent
+from lims_sys.syntax s 
+join lims_sys.syntax_item i on s.syntax_id = i.syntax_id
+where name in 
+(
+:names
+)
+and s.version_status != 'X'
+order by s.name, s.version_status, i.order_number;
+</value>
+   </row>
+   <row>
+      <key>diff_role_config</key>
+      <value>select config_group.path || '\' || ci.name fullpath, r.name, cr.config_value, ci.system_value
+from lims_sys.config_role cr
+join lims_sys.lims_role r on r.role_id = cr.role_id
+join lims_sys.config_item ci on cr.config_item_id = ci.config_item_id
+join (
+        select cg.config_group_id, sys_connect_by_path(cg.name, '\') path
+        from lims_sys.config_group cg
+        start with cg.parent_id is null
+        connect by prior cg.config_group_id = parent_id
+        order siblings by cg.name
+) config_group on config_group.config_group_id = ci.config_group_id
+order by 1, 2;	</value>
+   </row>
+   <row>
+      <key>diff_result_template</key>
+      <value>select config_group.path || '\' || ci.name fullpath, r.name, cr.config_value, ci.system_value
+from lims_sys.config_role cr
+join lims_sys.lims_role r on r.role_id = cr.role_id
+join lims_sys.config_item ci on cr.config_item_id = ci.config_item_id
+join (
+        select cg.config_group_id, sys_connect_by_path(cg.name, '\') path
+        from lims_sys.config_group cg
+        start with cg.parent_id is null
+        connect by prior cg.config_group_id = parent_id
+        order siblings by cg.name
+) config_group on config_group.config_group_id = ci.config_group_id
+order by 1, 2;	</value>
+   </row>
+   <row>
+      <key>diff_result_template_field</key>
+      <value>select config_group.path || '\' || ci.name fullpath, r.name, cr.config_value, ci.system_value
+from lims_sys.config_role cr
+join lims_sys.lims_role r on r.role_id = cr.role_id
+join lims_sys.config_item ci on cr.config_item_id = ci.config_item_id
+join (
+        select cg.config_group_id, sys_connect_by_path(cg.name, '\') path
+        from lims_sys.config_group cg
+        start with cg.parent_id is null
+        connect by prior cg.config_group_id = parent_id
+        order siblings by cg.name
+) config_group on config_group.config_group_id = ci.config_group_id
+order by 1, 2;	</value>
+   </row>
+   <row>
+      <key>diff_request_template</key>
+      <value>select t.name, t.description, t.version_status, t.group_id, t.status, t.syntax_id, 
+tf.prompt_text, tf.default_num, tf.default_text, tf.receiving, 
+(select name from lims_sys.schema_field where schema_field_id = tf.schema_field_id) schema_field, 
+(select name from lims_sys.schema_field_prompt where schema_field_prompt_id = tf.schema_field_prompt_id) schema_field_prompt, 
+tf.displayed, tf.mandatory, tf.order_number, tf.prompted
+from lims_sys.u_request_template t
+left outer join lims_sys.u_request_template_field tf on t.template_id = tf.template_id
+where t.name in (
+    :names
+)
+and t.version_status = 'A'
+order by t.name, tf.order_number;
+</value>
+   </row>
+   <row>
+      <key>diff_reagent_tracking_recipe</key>
+      <value>--Template Formulas
+declare 
+    ct int;
+    cat varchar2(20);
+    chk varchar2(2);
+    val varchar2(20);
+    worksheet_aliquot_type varchar2(20);
+    worksheet_aliquot_type_name varchar2(200);
+    stock_template varchar2(20);
+    stock_template_name varchar2(200);
+    amount varchar2(20);
+    unit varchar2(20);
+    unit_name varchar2(20);
+    recipe varchar2(4000);
+    
+cursor templates is
+    select t.name, tf.default_text
+    from lims_sys.plate_template_field tf
+    join lims_sys.plate_template t on t.plate_template_id = tf.plate_template_id
+    where t.name like 'PES%'
+    and t.version_status = 'A'
+    and name in 
+    (
+:names
+    )
+    and tf.schema_field_id = 4014
+    order by 1, 2;
+begin
+
+    dbms_output.put('Template Name' || chr(9) || 'Default Formula');
+
+    for t in templates loop
+        dbms_output.put_line(null);
+        dbms_output.put(t.name || chr(9));
+        
+        if t.default_text is null then continue; end if;
+                
+        val := '';
+        recipe := '"';
+        ct := 0;
+        
+        for i in 1 .. (1+length(t.default_text)) loop
+            if i = length(t.default_text) then val := val || substr(t.default_text, i, 1); chk := chr(13); 
+            elsif i > length(t.default_text) then chk := chr(10);
+            else chk := substr(t.default_text, i, 1);
+            end if;
+            
+            if chk = ',' or chk = chr(13) then 
+                ct := ct + 1;
+                if ct = 1 then worksheet_aliquot_type := val;
+                elsif ct = 2 then stock_template := val;
+                elsif ct = 3 then amount := val;
+                else unit := val;
+                end if;
+                val := '';
+            elsif chk = chr(10) then
+                select name into worksheet_aliquot_type_name from lims_sys.worksheet_aliquot_type where worksheet_aliquot_type_id = worksheet_aliquot_type;
+                select name into stock_template_name from lims_sys.stock_template where stock_template_id = stock_template;
+                select name into unit_name from lims_sys.unit where unit_id = unit;
+                recipe := recipe || worksheet_aliquot_type_name || ':  ' || stock_template_name || ', ' || amount || ' ' || unit_name || chr(13) || chr(10);
+                worksheet_aliquot_type := '';
+                stock_template := '';
+                amount := '';
+                unit := '';
+                ct := 0;
+            else 
+                val := val || chk;
+            end if;
+        end loop;
+        dbms_output.put(regexp_replace(recipe, '[[:space:]]+$', '') || '"');
+    end loop;
+    dbms_output.put_line(null);
+end;
+</value>
+   </row>
+   <row>
+      <key>diff_plate_template</key>
+      <value>select (select name from lims_sys.syntax where syntax_id = pt.syntax_id) syntax,pt.group_id,pt.name,pt.description,pt.plate_template_type,
+pt.status,pt.plate_width,pt.plate_height,pt.row_label,pt.col_label,pt.usable_positions,pt.load_order,pt.uses_default_syntax,pt.move_aliquots,
+pt.exec_plate_template,(select name from lims_sys.schema_field where schema_field_id = ptf.schema_field_id) sf,
+(select name from lims_sys.schema_field_prompt where schema_field_prompt_id = ptf.schema_field_prompt_id) sfp,
+ptf.prompt_text,ptf.default_num,ptf.default_text,ptf.displayed,ptf.mandatory,ptf.order_number,ptf.prompted,ptf.receiving,
+(select name from lims_sys.filter where filter_id = ptf.filter_id)
+from lims_sys.plate_template pt
+left outer join lims_sys.plate_template_field ptf on pt.plate_template_id = ptf.plate_template_id
+where pt.name in 
+(
+    :names
+)
+and pt.version_status = 'A'
+order by pt.name, ptf.order_number;</value>
+   </row>
+   <row>
+      <key>diff_plate_order</key>
+      <value>select pt.name, pte.plate_template_order,pte.stock_template_id,
+(select name || ' ' || version_status from lims_sys.workflow where workflow_id = pte.workflow_id) wf,
+(select name || ' ' || version_status from lims_sys.unit where unit_id = pte.unit_id) u,
+(select name || ' ' || version_status from lims_sys.worksheet_aliquot_type where worksheet_aliquot_type_id = pte.worksheet_aliquot_type_id) ws,pte.plate_template_row,
+pte.plate_template_column,pte.parent_entry_number,pte.amount,pte.link_stock
+from lims_sys.plate_template pt
+left outer join lims_sys.plate_template_entry pte on pt.plate_template_id = pte.plate_template_id
+where pt.name in 
+(
+    :names
+)
+and pt.version_status = 'A'
+order by pt.name, pte.plate_template_order;</value>
+   </row>
+   <row>
+      <key>diff_phrase</key>
+      <value>select ph.name, ph.group_id, ph.description, 
+  pe.phrase_name, pe.phrase_description, pe.order_number, pe.phrase_info
+from lims_sys.phrase_header ph
+left outer join lims_sys.phrase_entry pe on ph.phrase_id = pe.phrase_id
+where ph.name in 
+(
+:names
+)
+order by ph.name, pe.order_number;</value>
+   </row>
+   <row>
+      <key>diff_instrument</key>
+      <value>select i.name, i.is_part, nvl(i.requires_approval,'F') requires_approval,i.in_use,i.out_of_service,i.out_of_calibration,i.group_id,i.description,
+    (select name from lims_sys.location where location_id = i.location_id) loc, i.serial_number, 
+    (select name from lims_sys.instrument_type where instrument_type_id = i.instrument_type_id) instr_type,
+    i.service_interval, i.calibration_interval, i.bgp_id, ic.worksheet_format_id, ic.rsf_preview, 
+    (select name from lims_sys.script where script_id = ic.parsing_script_id) ps, (select name from lims_sys.script where script_id = ic.mapping_script_id) ms,
+    ic.interface_type, ic.interface_name, ic.baud_rate, ic.data_bits, ic.stop_bits, ic.parity, ic.flow_control, ic.input_file_directory,
+    ic.input_file_extension, ic.output_file_directory, ic.output_file_extension, ic.copy_file, ic.print_file, ic.file_delimiting, ic.start_of_file,
+    ic.end_of_file, ic.message_delimiting, ic.start_of_message, ic.end_of_message, ic.skip_after_som, ic.timeout, ic.discard_chars, ic.start_command,
+    ic.reply_eom, ic.reply_eof, (select substr(name, 1, length(name)-1) from lims_sys.workstation where workstation_id = ic.workstation_id) wkstn, 
+    ic.worksheet_id, ic.input_file_subdirectories, ic.rsf_directory, ic.rsf_extension
+from lims_sys.instrument i 
+join lims_sys.instrument_control ic on i.instrument_control_id = ic.instrument_control_id
+where i.name in 
+(
+:names
+)
+order by i.name;</value>
+   </row>
+   <row>
+      <key>diff_folder</key>
+      <value>select lpad(' ' , (level-1)*2) || f.name name, se.name entity, 
+    sys_connect_by_path(f.name, '\') path,
+    (select name from lims_sys.filter where filter_id = f.filter_id) filter,
+    f.group_id, f.operator_id, f.operator_access_level, f.group_access_level, 
+    f.standard_access_level, f.report_id, f.allow_create, f.refresh_time, 
+    f.inherit_filter, f.explorer_extension_id, f.allow_detail_extensions, 
+    f.default_plateworkflow_id, f.allow_item_count
+from lims_sys.folder f
+join lims_sys.schema_entity se on f.schema_entity_id = se.schema_entity_id
+start with f.parent_id is null
+connect by prior f.folder_id = parent_id
+order siblings by f.description, f.name;</value>
+   </row>
+   <row>
+      <key>diff_filter</key>
+      <value>select name, description, replace(replace(where_statement, chr(13), '&lt;13>'), chr(10), '&lt;10>') where_stmnt,
+    user_defined, nvl(use_in_search_window, 'F') use_in_search_window,
+    (select name from lims_sys.schema_table where schema_table_id = filter.schema_table_id)
+from lims_sys.filter 
+where name in 
+(
+:names
+)
+order by name;
+</value>
+   </row>
+   <row>
+      <key>diff_field_prompt</key>
+      <value>select st.name, st.database_name, (select name from lims_sys.phrase_header where phrase_id = sf.phrase_id) phrase,
+  sf.name,sf.database_name,sf.use_phrase_name,sf.user_defined,sf.datatype,sf.unique_key,
+  sf.lookup_schema_table_id,sf.master_table,sf.read_only,sf.data_length,sfp.name,sfp.prompt_type,
+  sfp.default_text,(select name from lims_sys.filter where filter_id = sfp.filter_id) filter,sfp.prompt_entity_id,
+  sfp.default_num,sfp.info_num1,sfp.info_num2,sfp.info_num3,sfp.info_text1,sfp.info_text2,sfp.prompt_text,
+  sfp.allow_in_template,sfp.readonly_flag
+from lims_sys.schema_table st 
+join lims_sys.schema_field sf on sf.schema_table_id = st.schema_table_id
+join lims_sys.schema_field_prompt sfp on sf.schema_field_id = sfp.schema_field_id
+where st.database_name in (
+:table_names
+)
+order by st.name, sf.name, sfp.name;</value>
+   </row>
+   <row>
+      <key>diff_email_config</key>
+      <value>declare
+  query_blob long;
+  query_string varchar2(32767);
+  query_string_clean varchar2(32767);
+  
+  body_blob long;
+  body_string varchar2(32767);
+  body_string_clean varchar2(32767);
+begin
+  for rec in (select e.u_email_id, e.name, e.description, e.version_status, e.group_id, eu.u_from, eu.u_to, eu.u_cc, eu.u_bcc, eu.u_subject, eu.u_body, eu.u_query, eu.u_html
+              from lims_sys.u_email e
+              join lims_sys.u_email_user eu on e.u_email_id = eu.u_email_id
+              where name in (
+:names
+              ) order by name) loop
+        dbms_output.put_line(rec.name || chr(9) || rec.description || chr(9) || rec.version_status || chr(9) || rec.group_id || chr(9) || rec.u_from || chr(9) || rec.u_to || chr(9) || rec.u_cc || chr(9) || rec.u_bcc || chr(9) || rec.u_subject || chr(9) || rec.u_body || chr(9) || rec.u_query || chr(9) || rec.u_html || chr(13) || chr(10));
+        
+        select a.object_data 
+        into query_blob 
+        from lims_sys.attachment a
+        join lims_sys.note_entry ne on a.attachment_id = ne.attachment_id
+        where ne.note_table_name = 'U_EMAIL'
+        and ne.note_table_entry = rec.u_email_id
+        and ne.subject = 'QUERY';
+        
+        if query_blob is not null then
+          query_string := utl_raw.cast_to_varchar2(query_blob);
+          query_string_clean := substr(query_string, instr(query_string, '--BEGIN_NOTE'), instr(query_string, '--END_NOTE') + 10 - instr(query_string, '--BEGIN_NOTE'));
+          dbms_output.put_line(query_string_clean);
+        end if;
+        
+        select a.object_data 
+        into body_blob 
+        from lims_sys.attachment a
+        join lims_sys.note_entry ne on a.attachment_id = ne.attachment_id
+        where ne.note_table_name = 'U_EMAIL'
+        and ne.note_table_entry = rec.u_email_id
+        and ne.subject = 'BODY_TEXT';
+      
+        if body_blob is not null then
+          body_string := utl_raw.cast_to_varchar2(body_blob);
+          body_string_clean := substr(body_string, instr(body_string, '--BEGIN_NOTE'), instr(body_string, '--END_NOTE') + 10 - instr(body_string, '--BEGIN_NOTE'));
+          dbms_output.put_line(body_string_clean);
+        end if;
+    end loop;
+end;
+
+</value>
+   </row>
+   <row>
+      <key>diff_destination</key>
+      <value>select name, destination_type, info_text1, info_text2, prompt_for_destination, parent_version_id, info_text3, object_name, 
+group_id, version, description, version_status, syntax_id, extension_id, schema_entity_id, number_of_copies, subject,
+recipients, body, body_format, additional_recipients, include_attachment, email_lookup_field, address_type, 
+additional_attachments, store_notification, mail_system
+from lims_sys.destination
+where name in 
+(
+:name
+)
+order by name;</value>
+   </row>
+   <row>
+      <key>diff_aliquot_template</key>
+      <value>select name, destination_type, info_text1, info_text2, prompt_for_destination, parent_version_id, info_text3, object_name, 
+group_id, version, description, version_status, syntax_id, extension_id, schema_entity_id, number_of_copies, subject,
+recipients, body, body_format, additional_recipients, include_attachment, email_lookup_field, address_type, 
+additional_attachments, store_notification, mail_system
+from lims_sys.destination
+where name in 
+(
+:name
+)
+order by name;</value>
    </row>
 </rows>
